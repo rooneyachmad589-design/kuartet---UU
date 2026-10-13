@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuartet UU Indonesia</title>
+    <!-- Menggunakan Firebase v8 Compat agar mudah dipasang tanpa NodeJS -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --primary: #c21807; /* Merah Indonesia */
+            --white: #ffffff;
+            --blue: #0b3d91;
+            --gold: #d4af37;
+            --bg: #f4f6f9;
+            --text: #333;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; padding: 0; background-color: var(--bg); color: var(--text); display: flex; justify-content: center; }
+        #app { width: 100%; max-width: 800px; min-height: 100vh; background: var(--white); box-shadow: 0 0 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        header { background: var(--primary); color: var(--white); padding: 15px; text-align: center; border-bottom: 4px solid var(--gold); }
+        h1 { margin: 0; font-size: 1.5rem; }
+        .screen { display: none; padding: 20px; flex: 1; }
+        .screen.active { display: flex; flex-direction: column; }
+        input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; }
+        button { background: var(--blue); color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #082d6b; }
+        button.btn-red { background: var(--primary); }
+        button:disabled { background: #aaa; cursor: not-allowed; }
+        .card { border: 2px solid var(--blue); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); position: relative; }
+        .card-category { background: var(--gold); color: #000; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; display: inline-block; margin-bottom: 5px; }
+        .card-title { font-weight: bold; color: var(--blue); margin-bottom: 4px; }
+        .card-uu { font-size: 0.8rem; color: var(--primary); margin-bottom: 8px; font-weight: bold; }
+        .card-fact { font-size: 0.85rem; color: #555; }
+        .player-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .player-box { background: #eef2f5; padding: 10px; border-radius: 8px; text-align: center; border: 2px solid transparent; }
+        .player-box.active-turn { border-color: var(--primary); background: #ffebee; }
+        .log-box { height: 100px; overflow-y: auto; background: #f9f9f9; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px; }
+        .hand-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .action-area { background: #eef2f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .hidden { display: none !important; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; font-size: 0.9rem; display: none; z-index: 1000; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h1>Kuartet UU Indonesia</h1>
+        <div id="header-status" style="font-size: 0.8rem; margin-top: 5px;">Memuat sistem...</div>
+    </header>
+
+    <!-- SCREEN 1: HOME -->
+    <div id="screen-home" class="screen active">
+        <h2>Selamat Datang!</h2>
+        <p>Mainkan kuartet dengan tema Undang-Undang Republik Indonesia bersama 4-6 temanmu.</p>
+        <input type="text" id="input-name" placeholder="Masukkan namamu (Maks 10 huruf)" maxlength="10">
+        <button onclick="createRoom()">Buat Room Baru</button>
+        <hr style="width: 100%; border: 0.5px solid #ccc; margin: 15px 0;">
+        <input type="text" id="input-room-code" placeholder="Masukkan 6 Digit Kode Room" maxlength="6">
+        <button class="btn-red" onclick="joinRoom()">Gabung Room</button>
+    </div>
+
+    <!-- SCREEN 2: LOBBY -->
+    <div id="screen-lobby" class="screen">
+        <h2 style="text-align: center;">Room: <span id="lobby-code" style="color: var(--primary); letter-spacing: 2px;"></span></h2>
+        <p style="text-align: center; font-size: 0.9rem;">Bagikan kode di atas ke temanmu!</p>
+        <div class="player-list" id="lobby-players"></div>
+        <button id="btn-start" onclick="startGame()" class="hidden">Mulai Permainan</button>
+        <button class="btn-red" onclick="leaveRoom()" style="margin-top: 15px; background: #888;">Keluar Room</button>
+    </div>
+
+    <!-- SCREEN 3: GAME -->
+    <div id="screen-game" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0;">Room <span id="game-code"></span></h3>
+            <span id="game-deck-count" style="font-size: 0.9rem; font-weight: bold;">Kartu Sisa: 0</span>
+        </div>
+        
+        <div class="log-box" id="game-log"></div>
+        
+        <h4>Lawan:</h4>
+        <div class="player-list" id="game-players"></div>
+
+        <div id="action-area" class="action-area hidden">
+            <h4 style="margin-top: 0;">Giliranmu! Minta kartu:</h4>
+            <select id="select-target">
+                <option value="">-- Pilih Lawan --</option>
+            </select>
+            <select id="select-category" onchange="updateCardDropdown()">
+                <option value="">-- Pilih Kategori --</option>
+            </select>
+            <select id="select-card">
+                <option value="">-- Pilih Kartu --</option>
+            </select>
+            <button onclick="requestCard()">Minta Kartu</button>
+        </div>
+
+        <h4>Kartu Kamu (<span id="my-card-count">0</span>) | Poin: <span id="my-score">0</span></h4>
+        <div class="hand-container" id="my-hand"></div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBBE8REh2t2fyVbR9etPF02GSi5jylBfCs",
+  authDomain: "kuartet-uu.firebaseapp.com",
+  projectId: "kuartet-uu",
+  storageBucket: "kuartet-uu.firebasestorage.app",
+  messagingSenderId: "742185699852",
+  appId: "1:742185699852:web:462973152e727d5d4f3c29"
+};
+
+    // Inisialisasi Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    // === DATA MASTER KARTU UU ===
+    const CARDS = [
+        { id: "P1", cat: "Pendidikan", uu: "UU No. 20 Tahun 2003", title: "Hak Siswa", fact: "Setiap peserta didik berhak mendapat pendidikan agama sesuai agama yang dianutnya." },
+        { id: "P2", cat: "Pendidikan", uu: "UU No. 20 Tahun 2003", title: "Wajib Belajar", fact: "Warga negara usia 7-15 tahun wajib mengikuti pendidikan dasar." },
+        { id: "P3", cat: "Pendidikan", uu: "UU No. 20 Tahun 2003", title: "Anggaran", fact: "Dana pendidikan dialokasikan minimal 20% dari APBN dan APBD." },
+        { id: "P4", cat: "Pendidikan", uu: "UU No. 20 Tahun 2003", title: "Peran Masyarakat", fact: "Masyarakat berhak menyelenggarakan pendidikan berbasis masyarakat." },
+        { id: "A1", cat: "Perlindungan Anak", uu: "UU No. 35 Tahun 2014", title: "Hak Identitas", fact: "Setiap anak berhak atas suatu nama sebagai identitas diri dan status kewarganegaraan." },
+        { id: "A2", cat: "Perlindungan Anak", uu: "UU No. 35 Tahun 2014", title: "Larangan Kekerasan", fact: "Dilarang melakukan kekerasan fisik, psikis, atau seksual terhadap anak." },
+        { id: "A3", cat: "Perlindungan Anak", uu: "UU No. 35 Tahun 2014", title: "Pekerja Anak", fact: "Anak berhak mendapat perlindungan dari eksploitasi ekonomi dan pekerjaan yang membahayakan." },
+        { id: "A4", cat: "Perlindungan Anak", uu: "UU No. 35 Tahun 2014", title: "Kewajiban Orang Tua", fact: "Orang tua wajib mengasuh, memelihara, mendidik, dan melindungi anak." },
+        { id: "L1", cat: "Lalu Lintas", uu: "UU No. 22 Tahun 2009", title: "Wajib Helm", fact: "Pengendara dan penumpang sepeda motor wajib mengenakan helm SNI." },
+        { id: "L2", cat: "Lalu Lintas", uu: "UU No. 22 Tahun 2009", title: "Sabuk Keselamatan", fact: "Pengemudi dan penumpang mobil di kursi depan wajib pakai sabuk pengaman." },
+        { id: "L3", cat: "Lalu Lintas", uu: "UU No. 22 Tahun 2009", title: "Pejalan Kaki", fact: "Pejalan kaki berhak atas ketersediaan fasilitas pendukung seperti trotoar dan zebra cross." },
+        { id: "L4", cat: "Lalu Lintas", uu: "UU No. 22 Tahun 2009", title: "Syarat SIM", fact: "Setiap orang yang mengemudikan kendaraan bermotor wajib memiliki SIM." },
+        { id: "H1", cat: "Lingkungan", uu: "UU No. 32 Tahun 2009", title: "Amdal", fact: "Setiap usaha yang berdampak penting pada lingkungan wajib memiliki Amdal." },
+        { id: "H2", cat: "Lingkungan", uu: "UU No. 32 Tahun 2009", title: "Larangan Membakar", fact: "Setiap orang dilarang membuka lahan dengan cara membakar." },
+        { id: "H3", cat: "Lingkungan", uu: "UU No. 32 Tahun 2009", title: "Ganti Rugi", fact: "Pencemar lingkungan wajib membayar ganti rugi dan memulihkan lingkungan." },
+        { id: "H4", cat: "Lingkungan", uu: "UU No. 32 Tahun 2009", title: "Hak Informasi", fact: "Setiap orang berhak mendapat informasi lingkungan hidup yang berkaitan dengan peran aktifnya." },
+        { id: "K1", cat: "Ketenagakerjaan", uu: "UU No. 13 Tahun 2003", title: "Upah Minimum", fact: "Pengusaha dilarang membayar upah lebih rendah dari upah minimum." },
+        { id: "K2", cat: "Ketenagakerjaan", uu: "UU No. 13 Tahun 2003", title: "Hak Cuti", fact: "Pekerja berhak atas cuti tahunan minimal 12 hari setelah bekerja 1 tahun." },
+        { id: "K3", cat: "Ketenagakerjaan", uu: "UU No. 13 Tahun 2003", title: "Keselamatan Kerja", fact: "Setiap pekerja berhak mendapat perlindungan atas keselamatan dan kesehatan kerja." },
+        { id: "K4", cat: "Ketenagakerjaan", uu: "UU No. 13 Tahun 2003", title: "Pesangon", fact: "Dalam hal terjadi PHK, pengusaha wajib membayar uang pesangon sesuai ketentuan." },
+        { id: "S1", cat: "Konsumen", uu: "UU No. 8 Tahun 1999", title: "Hak Kenyamanan", fact: "Konsumen berhak atas kenyamanan, keamanan, dan keselamatan dalam mengonsumsi barang/jasa." },
+        { id: "S2", cat: "Konsumen", uu: "UU No. 8 Tahun 1999", title: "Kewajiban Jujur", fact: "Pelaku usaha wajib memberikan informasi yang benar, jelas, dan jujur mengenai barang/jasa." },
+        { id: "S3", cat: "Konsumen", uu: "UU No. 8 Tahun 1999", title: "Kompensasi", fact: "Konsumen berhak mendapat kompensasi jika barang tidak sesuai dengan perjanjian." },
+        { id: "S4", cat: "Konsumen", uu: "UU No. 8 Tahun 1999", title: "Klausul Baku", fact: "Pelaku usaha dilarang membuat klausul baku yang mengalihkan tanggung jawabnya." }
+    ];
+
+    // Variabel Sesi
+    let myId = Math.random().toString(36).substring(2, 9);
+    let myName = "";
+    let currentRoomCode = null;
+    let unsubscribe = null;
+
+    // --- FUNGSI UTILITAS ---
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg; t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+    function generateCode() {
+        return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+    function addLog(roomRef, msg, currentLogs) {
+        let logs = currentLogs || [];
+        logs.push(msg);
+        if(logs.length > 50) logs.shift();
+        roomRef.update({ log: logs });
+    }
+
+    // --- FUNGSI LOBBY ---
+    async function createRoom() {
+        myName = document.getElementById('input-name').value.trim();
+        if(!myName) return showToast("Masukkan nama dulu!");
+        
+        document.getElementById('header-status').innerText = "Memeriksa kapasitas server...";
+        const snapshot = await db.collection('rooms').where('status', '==', 'playing').get();
+        if(snapshot.docs.length >= 10) { // Limit simulasi 40 pemain = ~10 room
+            return showToast("Server Penuh! Coba lagi nanti.");
+        }
+
+        document.getElementById('header-status').innerText = "Tersambung ke server real-time";
+        const code = generateCode();
+        currentRoomCode = code;
+
+        await db.collection('rooms').doc(code).set({
+            code: code,
+            status: 'waiting',
+            players: [{ id: myId, name: myName, cards: [], score: 0 }],
+            deck: [], turn: 0, log: ["Room dibuat. Menunggu pemain..."]
+        });
+
+        listenRoom(code);
+        showScreen('screen-lobby');
+    }
+
+    async function joinRoom() {
+        myName = document.getElementById('input-name').value.trim();
+        const code = document.getElementById('input-room-code').value.trim();
+        if(!myName || !code) return showToast("Isi nama dan kode room!");
+
+        const roomRef = db.collection('rooms').doc(code);
+        const doc = await roomRef.get();
+
+        if(!doc.exists) return showToast("Room tidak ditemukan!");
+        let data = doc.data();
+        if(data.status !== 'waiting') return showToast("Permainan sudah dimulai!");
+        if(data.players.length >= 6) return showToast("Room sudah penuh (Maks 6)!");
+
+        data.players.push({ id: myId, name: myName, cards: [], score: 0 });
+        await roomRef.update({ players: data.players });
+        
+        currentRoomCode = code;
+        listenRoom(code);
+        showScreen('screen-lobby');
+    }
+
+    function leaveRoom() {
+        if(unsubscribe) unsubscribe();
+        if(currentRoomCode) {
+            const roomRef = db.collection('rooms').doc(currentRoomCode);
+            roomRef.get().then(doc => {
+                if(doc.exists) {
+                    let players = doc.data().players.filter(p => p.id !== myId);
+                    if(players.length === 0) roomRef.delete();
+                    else roomRef.update({ players: players });
+                }
+            });
+        }
+        currentRoomCode = null; showScreen('screen-home');
+    }
+
+    // --- FUNGSI LISTENER REAL-TIME ---
+    function listenRoom(code) {
+        if(unsubscribe) unsubscribe();
+        unsubscribe = db.collection('rooms').doc(code).onSnapshot(doc => {
+            if(!doc.exists) { leaveRoom(); return showToast("Room ditutup Host."); }
+            const data = doc.data();
+            
+            // Render Lobby
+            if(data.status === 'waiting') {
+                document.getElementById('lobby-code').innerText = data.code;
+                const pList = document.getElementById('lobby-players');
+                pList.innerHTML = '';
+                data.players.forEach(p => {
+                    pList.innerHTML += `<div class="player-box">${p.name} ${p.id === data.players[0].id ? '(Host)' : ''}</div>`;
+                });
+                
+                if(data.players[0].id === myId && data.players.length >= 2) { // Set >= 2 utk tes, aslinya 4
+                    document.getElementById('btn-start').classList.remove('hidden');
+                } else {
+                    document.getElementById('btn-start').classList.add('hidden');
+                }
+            } 
+            // Render Game
+            else if(data.status === 'playing') {
+                showScreen('screen-game');
+                document.getElementById('game-code').innerText = data.code;
+                document.getElementById('game-deck-count').innerText = `Kartu Tumpukan: ${data.deck.length}`;
+                
+                // Render Log
+                const logBox = document.getElementById('game-log');
+                logBox.innerHTML = data.log.map(l => `<div>${l}</div>`).join('');
+                logBox.scrollTop = logBox.scrollHeight;
+
+                // Render Pemain & Lawan
+                const gamePlayers = document.getElementById('game-players');
+                gamePlayers.innerHTML = '';
+                let isMyTurn = data.players[data.turn].id === myId;
+                
+                data.players.forEach((p, index) => {
+                    if(p.id !== myId) {
+                        gamePlayers.innerHTML += `<div class="player-box ${data.turn === index ? 'active-turn' : ''}">
+                            <strong>${p.name}</strong><br>Kartu: ${p.cards.length} | Poin: ${p.score}
+                        </div>`;
+                    } else {
+                        document.getElementById('my-card-count').innerText = p.cards.length;
+                        document.getElementById('my-score').innerText = p.score;
+                        renderMyHand(p.cards);
+                        updateDropdowns(p.cards, data.players);
+                    }
+                });
+
+                if(isMyTurn) {
+                    document.getElementById('action-area').classList.remove('hidden');
+                } else {
+                    document.getElementById('action-area').classList.add('hidden');
+                }
+                
+                // Cek Akhir Game
+                if(data.deck.length === 0 && data.players.every(p => p.cards.length === 0)) {
+                    let winner = [...data.players].sort((a,b) => b.score - a.score)[0];
+                    alert(`PERMAINAN SELESAI!\nPemenang: ${winner.name} dengan ${winner.score} Poin!`);
+                    leaveRoom();
+                }
+            }
+        });
+    }
+
+    // --- FUNGSI GAMEPLAY ---
+    async function startGame() {
+        const roomRef = db.collection('rooms').doc(currentRoomCode);
+        const doc = await roomRef.get();
+        let players = doc.data().players;
+        
+        // Acak Kartu
+        let deck = [...CARDS].sort(() => Math.random() - 0.5);
+        
+        // Bagi 4 kartu per pemain
+        players.forEach(p => {
+            p.cards = deck.splice(0, 4);
+        });
+
+        await roomRef.update({ status: 'playing', players: players, deck: deck, turn: 0 });
+    }
+
+    function renderMyHand(myCards) {
+        const hand = document.getElementById('my-hand');
+        hand.innerHTML = '';
+        // Urutkan berdasarkan kategori agar mudah dilihat
+        myCards.sort((a, b) => a.cat.localeCompare(b.cat)).forEach(c => {
+            hand.innerHTML += `<div class="card">
+                <span class="card-category">${c.cat}</span>
+                <div class="card-uu">${c.uu}</div>
+                <div class="card-title">${c.title}</div>
+                <div class="card-fact">${c.fact}</div>
+            </div>`;
+        });
+    }
+
+    function updateDropdowns(myCards, allPlayers) {
+        const targetSel = document.getElementById('select-target');
+        const catSel = document.getElementById('select-category');
+        
+        // Dropdown Lawan
+        targetSel.innerHTML = '<option value="">-- Pilih Lawan --</option>';
+        allPlayers.forEach(p => {
+            if(p.id !== myId && p.cards.length > 0) {
+                targetSel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            }
+        });
+
+        // Dropdown Kategori (Hanya kategori yang pemain miliki)
+        let myCategories = [...new Set(myCards.map(c => c.cat))];
+        catSel.innerHTML = '<option value="">-- Pilih Kategori --</option>';
+        myCategories.forEach(cat => {
+            catSel.innerHTML += `<option value="${cat}">${cat}</option>`;
+        });
+        
+        updateCardDropdown(); // Reset dropdown kartu
+    }
+
+    function updateCardDropdown() {
+        const catSel = document.getElementById('select-category').value;
+        const cardSel = document.getElementById('select-ca
