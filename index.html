@@ -4,23 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kuartet UU Indonesia</title>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <!-- Firebase SDK v10 Modular CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBBE8REh2t2fyVbR9etPF02GSi5jylBfCs",
+          authDomain: "kuartet-uu.firebaseapp.com",
+          projectId: "kuartet-uu",
+          storageBucket: "kuartet-uu.firebasestorage.app",
+          messagingSenderId: "742185699852",
+          appId: "1:742185699852:web:462973152e727d5d4f3c29"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Ekspor ke global window agar bisa diakses fungsi game
+        window.db = db;
+        window.DB_METHODS = { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot };
+        
+        document.getElementById('header-status').innerText = "✅ Server Terhubung";
+        document.getElementById('header-status').style.color = "#00ff00";
+    </script>
     <style>
         :root { --primary: #c21807; --white: #ffffff; --blue: #0b3d91; --gold: #d4af37; --bg: #f4f6f9; --text: #333; }
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         body { margin: 0; padding: 0; background-color: var(--bg); color: var(--text); display: flex; justify-content: center; }
         #app { width: 100%; max-width: 600px; min-height: 100vh; background: var(--white); box-shadow: 0 0 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         header { background: var(--primary); color: var(--white); padding: 15px; text-align: center; border-bottom: 4px solid var(--gold); }
         h1 { margin: 0; font-size: 1.4rem; }
         .screen { display: none; padding: 20px; flex: 1; }
         .screen.active { display: flex; flex-direction: column; }
-        input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; -webkit-appearance: none; }
-        button { background: var(--blue); color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:active { transform: scale(0.98); }
+        input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; }
+        button { background: var(--blue); color: white; border: none; font-weight: bold; cursor: pointer; }
         button.btn-red { background: var(--primary); }
-        .card { border: 2px solid var(--blue); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        .card { border: 2px solid var(--blue); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff; }
         .card-category { background: var(--gold); color: #000; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; display: inline-block; margin-bottom: 5px; }
         .card-title { font-weight: bold; color: var(--blue); margin-bottom: 4px; font-size: 0.95rem; }
         .card-uu { font-size: 0.8rem; color: var(--primary); margin-bottom: 6px; font-weight: bold; }
@@ -36,45 +56,34 @@
     </style>
 </head>
 <body>
-
 <div id="app">
     <header>
         <h1>Kuartet UU Indonesia</h1>
-        <div id="header-status" style="font-size: 0.85rem; margin-top: 5px; font-weight: bold; color: #ffff00;">Menyambungkan Server...</div>
+        <div id="header-status" style="font-size: 0.85rem; margin-top: 5px; font-weight: bold; color: #ffff00;">Menghubungkan Server...</div>
     </header>
-
     <div id="error-box"></div>
-
-    <!-- SCREEN 1: HOME -->
     <div id="screen-home" class="screen active">
         <h2 style="margin-top:0;">Main Multiplayer</h2>
-        <p style="font-size: 0.9rem; color: #666;">Kumpulkan 4 kartu UU dalam satu kategori untuk mendapatkan poin!</p>
+        <p style="font-size: 0.9rem; color: #666;">Kumpulkan 4 kartu UU dalam satu kategori!</p>
         <input type="text" id="input-name" placeholder="Nama Kamu (Maks 10 Huruf)" maxlength="10">
         <button onclick="createRoom()">Buat Room Baru</button>
         <div style="text-align:center; margin: 10px 0; font-size:0.8rem; color:#888;">— ATAU —</div>
         <input type="text" id="input-room-code" placeholder="Kode Room 6 Digit" maxlength="6">
         <button class="btn-red" onclick="joinRoom()">Gabung Room</button>
     </div>
-
-    <!-- SCREEN 2: LOBBY -->
     <div id="screen-lobby" class="screen">
         <h2 style="text-align: center; margin-bottom: 5px;">Kode: <span id="lobby-code" style="color: var(--primary); letter-spacing: 2px;"></span></h2>
-        <p style="text-align: center; font-size: 0.85rem; color: #666; margin-top:0;">Bagikan kode ini ke temanmu!</p>
         <div class="player-list" id="lobby-players"></div>
         <button id="btn-start" onclick="startGame()" class="hidden">Mulai Permainan</button>
         <button class="btn-red" onclick="leaveRoom()" style="margin-top: 10px; background: #777;">Keluar</button>
     </div>
-
-    <!-- SCREEN 3: GAME -->
     <div id="screen-game" class="screen">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span style="font-size: 0.85rem; font-weight: bold;">Room: <span id="game-code"></span></span>
             <span id="game-deck-count" style="font-size: 0.85rem; font-weight: bold; color: var(--primary);">Tumpukan: 0</span>
         </div>
-        
         <div class="log-box" id="game-log"></div>
         <div class="player-list" id="game-players"></div>
-
         <div id="action-area" class="action-area hidden">
             <div style="font-weight:bold; font-size:0.85rem; margin-bottom:5px; color:var(--primary);">GILIRAN KAMU! Minta kartu:</div>
             <select id="select-target"><option value="">1. Pilih Lawan</option></select>
@@ -82,36 +91,12 @@
             <select id="select-card"><option value="">3. Pilih Kartu Target</option></select>
             <button onclick="requestCard()">Minta Kartu Ini!</button>
         </div>
-
         <h4 style="margin: 10px 0 5px 0; font-size: 0.9rem;">Kartu Kamu (<span id="my-card-count">0</span>) | Poin: <span id="my-score">0</span></h4>
         <div class="hand-container" id="my-hand"></div>
     </div>
 </div>
 
 <script>
-    let db;
-    // Blok Deteksi Error
-    try {
-        const firebaseConfig = {
-          apiKey: "AIzaSyBBE8REh2t2fyVbR9etPF02GSi5jylBfCs",
-          authDomain: "kuartet-uu.firebaseapp.com",
-          projectId: "kuartet-uu",
-          storageBucket: "kuartet-uu.firebasestorage.app",
-          messagingSenderId: "742185699852",
-          appId: "1:742185699852:web:462973152e727d5d4f3c29"
-        };
-        
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        document.getElementById('header-status').innerText = "✅ Server Terhubung";
-        document.getElementById('header-status').style.color = "#00ff00";
-    } catch (error) {
-        document.getElementById('header-status').innerText = "❌ Gagal Terhubung";
-        document.getElementById('header-status').style.color = "#ff0000";
-        document.getElementById('error-box').style.display = "block";
-        document.getElementById('error-box').innerText = "Sistem Error: " + error.message;
-    }
-
     const CARDS = [
         { id: "P1", cat: "Pendidikan", uu: "UU No. 20/2003", title: "Hak Siswa", fact: "Peserta didik berhak mendapat pendidikan agama." },
         { id: "P2", cat: "Pendidikan", uu: "UU No. 20/2003", title: "Wajib Belajar", fact: "Warga usia 7-15 tahun wajib ikut pendidikan dasar." },
@@ -142,73 +127,59 @@
     let myId = Math.random().toString(36).substring(2, 9);
     let myName = "", currentRoomCode = null, unsubscribe = null;
 
-    function showScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
-    function showError(msg) {
-        document.getElementById('error-box').style.display = "block";
-        document.getElementById('error-box').innerText = msg;
-        setTimeout(() => { document.getElementById('error-box').style.display = "none"; }, 4000);
-    }
+    function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+    function showError(msg) { document.getElementById('error-box').style.display = "block"; document.getElementById('error-box').innerText = msg; setTimeout(() => { document.getElementById('error-box').style.display = "none"; }, 4000); }
     function generateCode() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
     async function createRoom() {
-        if(!db) return showError("Database belum terhubung!");
+        if(!window.db) return showError("Server belum siap, tunggu sebentar!");
         myName = document.getElementById('input-name').value.trim();
         if(!myName) return showError("Isi namamu dulu!");
-        
         const code = generateCode();
         currentRoomCode = code;
-
+        const { doc, setDoc } = window.DB_METHODS;
         try {
-            await db.collection('rooms').doc(code).set({
+            await setDoc(doc(window.db, "rooms", code), {
                 code: code, status: 'waiting', turn: 0,
                 players: [{ id: myId, name: myName, cards: [], score: 0 }],
-                deck: [], log: ["✅ Room dibuat. Menunggu teman masuk..."]
+                deck: [], log: ["✅ Room dibuat. Menunggu teman..."]
             });
             listenRoom(code);
             showScreen('screen-lobby');
-        } catch (e) {
-            showError("Gagal buat room: " + e.message);
-        }
+        } catch (e) { showError("Gagal buat room: " + e.message); }
     }
 
     async function joinRoom() {
-        if(!db) return showError("Database belum terhubung!");
+        if(!window.db) return showError("Server belum siap!");
         myName = document.getElementById('input-name').value.trim();
         const code = document.getElementById('input-room-code').value.trim();
-        if(!myName || !code) return showError("Isi nama dan kode room!");
-
+        if(!myName || !code) return showError("Isi nama & kode room!");
+        const { doc, getDoc, updateDoc } = window.DB_METHODS;
         try {
-            const roomRef = db.collection('rooms').doc(code);
-            const doc = await roomRef.get();
-
-            if(!doc.exists) return showError("Kode Room salah atau tidak ada!");
-            let data = doc.data();
-            if(data.status !== 'waiting') return showError("Permainan sudah dimulai!");
-            if(data.players.length >= 6) return showError("Room sudah penuh!");
-
+            const roomRef = doc(window.db, "rooms", code);
+            const snap = await getDoc(roomRef);
+            if(!snap.exists()) return showError("Kode Room salah!");
+            let data = snap.data();
+            if(data.status !== 'waiting') return showError("Game sudah dimulai!");
+            if(data.players.length >= 6) return showError("Room penuh!");
             data.players.push({ id: myId, name: myName, cards: [], score: 0 });
-            await roomRef.update({ players: data.players });
-            
+            await updateDoc(roomRef, { players: data.players });
             currentRoomCode = code;
             listenRoom(code);
             showScreen('screen-lobby');
-        } catch (e) {
-            showError("Gagal gabung: " + e.message);
-        }
+        } catch (e) { showError("Gagal gabung: " + e.message); }
     }
 
     function leaveRoom() {
         if(unsubscribe) unsubscribe();
-        if(currentRoomCode && db) {
-            const roomRef = db.collection('rooms').doc(currentRoomCode);
-            roomRef.get().then(doc => {
-                if(doc.exists) {
-                    let players = doc.data().players.filter(p => p.id !== myId);
-                    if(players.length === 0) roomRef.delete();
-                    else roomRef.update({ players: players });
+        if(currentRoomCode && window.db) {
+            const { doc, getDoc, deleteDoc, updateDoc } = window.DB_METHODS;
+            const roomRef = doc(window.db, "rooms", currentRoomCode);
+            getDoc(roomRef).then(snap => {
+                if(snap.exists()) {
+                    let players = snap.data().players.filter(p => p.id !== myId);
+                    if(players.length === 0) deleteDoc(roomRef);
+                    else updateDoc(roomRef, { players: players });
                 }
             });
         }
@@ -217,42 +188,31 @@
 
     function listenRoom(code) {
         if(unsubscribe) unsubscribe();
-        unsubscribe = db.collection('rooms').doc(code).onSnapshot(doc => {
-            if(!doc.exists) { leaveRoom(); return showError("Host menutup room."); }
-            const data = doc.data();
-            
+        const { doc, onSnapshot } = window.DB_METHODS;
+        unsubscribe = onSnapshot(doc(window.db, "rooms", code), (snap) => {
+            if(!snap.exists()) { leaveRoom(); return showError("Room ditutup."); }
+            const data = snap.data();
             if(data.status === 'waiting') {
                 document.getElementById('lobby-code').innerText = data.code;
                 const pList = document.getElementById('lobby-players');
                 pList.innerHTML = '';
-                data.players.forEach(p => {
-                    pList.innerHTML += `<div class="player-box">${p.name} ${p.id === data.players[0].id ? '(Host)' : ''}</div>`;
-                });
-                
-                if(data.players[0].id === myId && data.players.length >= 2) {
+                data.players.forEach(p => { pList.innerHTML += `<div class="player-box">${p.name} ${p.id === data.players[0].id ? '(Host)' : ''}</div>`; });
+                if(data.players[0].id === myId) {
                     document.getElementById('btn-start').classList.remove('hidden');
-                } else {
-                    document.getElementById('btn-start').classList.add('hidden');
-                }
-            } 
-            else if(data.status === 'playing') {
+                } else { document.getElementById('btn-start').classList.add('hidden'); }
+            } else if(data.status === 'playing') {
                 showScreen('screen-game');
                 document.getElementById('game-code').innerText = data.code;
                 document.getElementById('game-deck-count').innerText = `Sisa Tumpukan: ${data.deck.length}`;
-                
                 const logBox = document.getElementById('game-log');
                 logBox.innerHTML = data.log.map(l => `<div>> ${l}</div>`).join('');
                 logBox.scrollTop = logBox.scrollHeight;
-
                 const gamePlayers = document.getElementById('game-players');
                 gamePlayers.innerHTML = '';
                 let isMyTurn = data.players[data.turn].id === myId;
-                
                 data.players.forEach((p, index) => {
                     if(p.id !== myId) {
-                        gamePlayers.innerHTML += `<div class="player-box ${data.turn === index ? 'active-turn' : ''}">
-                            <strong>${p.name}</strong><br>Kartu: ${p.cards.length} | Poin: ${p.score}
-                        </div>`;
+                        gamePlayers.innerHTML += `<div class="player-box ${data.turn === index ? 'active-turn' : ''}"><strong>${p.name}</strong><br>Kartu: ${p.cards.length} | Poin: ${p.score}</div>`;
                     } else {
                         document.getElementById('my-card-count').innerText = p.cards.length;
                         document.getElementById('my-score').innerText = p.score;
@@ -260,13 +220,11 @@
                         updateDropdowns(p.cards, data.players);
                     }
                 });
-
                 if(isMyTurn) document.getElementById('action-area').classList.remove('hidden');
                 else document.getElementById('action-area').classList.add('hidden');
-                
                 if(data.deck.length === 0 && data.players.every(p => p.cards.length === 0)) {
                     let winner = [...data.players].sort((a,b) => b.score - a.score)[0];
-                    alert(`GAME SELESAI!\nPemenang: ${winner.name} (${winner.score} Poin)`);
+                    alert(`SELESAI! Pemenang: ${winner.name} (${winner.score} Poin)`);
                     leaveRoom();
                 }
             }
@@ -274,74 +232,72 @@
     }
 
     async function startGame() {
-        const roomRef = db.collection('rooms').doc(currentRoomCode);
-        const doc = await roomRef.get();
-        let players = doc.data().players;
+        const { doc, getDoc, updateDoc } = window.DB_METHODS;
+        const roomRef = doc(window.db, "rooms", currentRoomCode);
+        const snap = await getDoc(roomRef);
+        let players = snap.data().players;
         let deck = [...CARDS].sort(() => Math.random() - 0.5);
-        
         players.forEach(p => { p.cards = deck.splice(0, 4); });
-        await roomRef.update({ status: 'playing', players: players, deck: deck, turn: 0, log: ["🚀 PERMAINAN DIMULAI!"] });
+        await updateDoc(roomRef, { status: 'playing', players: players, deck: deck, turn: 0, log: ["🚀 PERMAINAN DIMULAI!"] });
     }
 
     function renderMyHand(myCards) {
         const hand = document.getElementById('my-hand');
         hand.innerHTML = '';
         myCards.sort((a, b) => a.cat.localeCompare(b.cat)).forEach(c => {
-            hand.innerHTML += `<div class="card">
-                <span class="card-category">${c.cat}</span>
-                <div class="card-uu">${c.uu}</div>
-                <div class="card-title">${c.title}</div>
-                <div class="card-fact">${c.fact}</div>
-            </div>`;
+            hand.innerHTML += `<div class="card"><span class="card-category">${c.cat}</span><div class="card-uu">${c.uu}</div><div class="card-title">${c.title}</div><div class="card-fact">${c.fact}</div></div>`;
         });
     }
 
     function updateDropdowns(myCards, allPlayers) {
         const targetSel = document.getElementById('select-target');
         const catSel = document.getElementById('select-category');
-        
         targetSel.innerHTML = '<option value="">1. Pilih Lawan</option>';
-        allPlayers.forEach(p => {
-            if(p.id !== myId && p.cards.length > 0) targetSel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-        });
-
+        allPlayers.forEach(p => { if(p.id !== myId && p.cards.length > 0) targetSel.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
         let myCategories = [...new Set(myCards.map(c => c.cat))];
         catSel.innerHTML = '<option value="">2. Pilih Kategori</option>';
         myCategories.forEach(cat => catSel.innerHTML += `<option value="${cat}">${cat}</option>`);
         updateCardDropdown();
     }
 
-    function updateCardDropdown() {
+    async function updateCardDropdown() {
         const catSel = document.getElementById('select-category').value;
         const cardSel = document.getElementById('select-card');
         cardSel.innerHTML = '<option value="">3. Pilih Kartu Target</option>';
         if(!catSel) return;
-
         let allCardsInCat = CARDS.filter(c => c.cat === catSel);
-        const roomRef = db.collection('rooms').doc(currentRoomCode);
-        roomRef.get().then(doc => {
-            let me = doc.data().players.find(p => p.id === myId);
-            let myCardsIds = me.cards.map(c => c.id);
-            allCardsInCat.forEach(c => {
-                if(!myCardsIds.includes(c.id)) cardSel.innerHTML += `<option value="${c.id}">${c.title}</option>`;
-            });
-        });
+        const { doc, getDoc } = window.DB_METHODS;
+        const snap = await getDoc(doc(window.db, "rooms", currentRoomCode));
+        let me = snap.data().players.find(p => p.id === myId);
+        let myCardsIds = me.cards.map(c => c.id);
+        allCardsInCat.forEach(c => { if(!myCardsIds.includes(c.id)) cardSel.innerHTML += `<option value="${c.id}">${c.title}</option>`; });
     }
 
     async function requestCard() {
         const targetId = document.getElementById('select-target').value;
         const cardId = document.getElementById('select-card').value;
         if(!targetId || !cardId) return showError("Pilih lawan & kartu target dulu!");
-
-        const roomRef = db.collection('rooms').doc(currentRoomCode);
-        const doc = await roomRef.get();
-        let data = doc.data();
+        const { doc, getDoc, updateDoc } = window.DB_METHODS;
+        const roomRef = doc(window.db, "rooms", currentRoomCode);
+        const snap = await getDoc(roomRef);
+        let data = snap.data();
         let players = data.players;
-        
         let me = players.find(p => p.id === myId);
         let target = players.find(p => p.id === targetId);
         let cardObj = CARDS.find(c => c.id === cardId);
         let targetHasCard = target.cards.findIndex(c => c.id === cardId);
-
         if(targetHasCard !== -1) {
-            let cardToMove = target.cards.splice(targetHasCard
+            let cardToMove = target.cards.splice(targetHasCard, 1)[0];
+            me.cards.push(cardToMove);
+            checkQuartet(me, data.log);
+            data.log.push(`✅ ${me.name} dapat kartu "${cardObj.title}" dari ${target.name}!`);
+            await updateDoc(roomRef, { players: players, log: data.log });
+        } else {
+            data.log.push(`❌ ${target.name} tidak punya "${cardObj.title}".`);
+            if(data.deck.length > 0) {
+                let drawnCard = data.deck.pop();
+                me.cards.push(drawnCard);
+                checkQuartet(me, data.log);
+                data.log.push(`📦 ${me.name} ambil 1 kartu dari tumpukan.`);
+            }
+       
